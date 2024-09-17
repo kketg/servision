@@ -1,0 +1,6 @@
+gunicorn
+celery
+redis
+flask
+firebase-admin
+requests
