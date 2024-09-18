@@ -1,3 +1,4 @@
+import datetime
 from flask import Flask, Response, request, jsonify
 from io import BytesIO
 import base64
@@ -17,14 +18,23 @@ from firebase_admin import credentials, auth
 # Put an environment variable with the filename here
 # cred = credentials.Certificate(...)
 # firebase_admin.initialize_app(cred)
+
 with open("config.json", "r") as f:
     config = json.loads(f.read())
+
+for a in config["algorithms"]:
+    if not os.path.exists(os.path.join("PROC", F"{a}")):
+        os.makedirs(os.path.join("PROC", F"{a}"))
+    if not os.path.exists(os.path.join("OUT", F"{a}")):
+        os.makedirs(os.path.join("OUT", F"{a}"))
+
+print(config)
 
 
 app = Flask(__name__, static_folder="./templates/static")
 
 app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
-app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/0'
+app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/1'
 
 celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
 celery.conf.update(app.config)
@@ -58,6 +68,8 @@ def index():
 def check_status(task_id):
     task = process_task.AsyncResult(task_id)
     print(task)
+    if task.state == "SUCCESS":
+        task.forget()
     return task.state
 
 @app.route("/vis/<algo>", methods = ['POST'])
@@ -70,7 +82,7 @@ def process(algo):
                 "message": "Incorrect request type"
             }
         )
-    if not config["algorithms"].contains(algo):
+    if algo not in config["algorithms"]:
         return jsonify(
             {
                 "result": 1,
@@ -78,35 +90,33 @@ def process(algo):
             }
         )
 
-    ts = time.time()
+    ts = datetime.datetime.fromtimestamp(time.time())
     uid = "SampleUser" #request.user["uid"]
     token = f"{algo}_{uid}_{ts}"
-    video_bytes = request.get_data()
-    store_path = os.path.join(f"{algo}_PROC",f"{token}.lrvb")
+    bytes = request.get_data()
+    store_path = os.path.join("PROC",f"{algo}",f"{token}.lrvb")
     with open(store_path, 'wb') as out:
-        out.write(video_bytes)
+        out.write(bytes)
     task = process_task.delay(token, algo, store_path)
-    print(task)
-    print(task.id)
+    print("Task: " + str(task))
     return jsonify(
         {
             "result": 0, 
-            "task": token,
+            "processing_call": token,
             "task_id": task.id,
             "message": "Successfully queued video"
         }
     )
 
-@celery.task
+@celery.task()
 def process_task(token, algo, store_path):
-    out_path = os.path.join(f"{algo}_OUT",f"{token}")
+    out_path = os.path.join("OUT",f"{algo}",f"{token}.lrvb")
     match algo:
         # ideally the algorithms would be in the format of a separate file (i.e. squat), 
         # and run by a function called proc_call(token, store_path, out_path)
         case _:
             sample.proc_call(token, store_path, out_path)
     
-    
 
 if __name__ == "__main__":
-   app.run(debug=True, port=8080)
+   app.run(debug=True, port=config["port"])
