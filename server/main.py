@@ -19,14 +19,17 @@ from firebase_admin import credentials, auth
 # cred = credentials.Certificate(...)
 # firebase_admin.initialize_app(cred)
 
-with open("config.json", "r") as f:
+proc_dir = os.path.join("..", "PROC")
+out_dir = os.path.join("..", "OUT")
+
+with open(os.path.join("..","config.json"), "r") as f:
     config = json.loads(f.read())
 
 for a in config["algorithms"]:
-    if not os.path.exists(os.path.join("PROC", F"{a}")):
-        os.makedirs(os.path.join("PROC", F"{a}"))
-    if not os.path.exists(os.path.join("OUT", F"{a}")):
-        os.makedirs(os.path.join("OUT", F"{a}"))
+    if not os.path.exists(os.path.join(proc_dir, F"{a}")):
+        os.makedirs(os.path.join(proc_dir, F"{a}"))
+    if not os.path.exists(os.path.join(out_dir, F"{a}")):
+        os.makedirs(os.path.join(out_dir, F"{a}"))
 
 print(config)
 
@@ -94,7 +97,7 @@ def process(algo):
     uid = "SampleUser" #request.user["uid"]
     token = f"{algo}_{uid}_{ts}"
     bytes = request.get_data()
-    store_path = os.path.join("PROC",f"{algo}",f"{token}.lrvb")
+    store_path = os.path.join(proc_dir,f"{algo}",f"{token}.lrvb")
     with open(store_path, 'wb') as out:
         out.write(bytes)
     task = process_task.delay(token, algo, store_path)
@@ -110,7 +113,7 @@ def process(algo):
 
 @celery.task()
 def process_task(token, algo, store_path):
-    out_path = os.path.join("OUT",f"{algo}",f"{token}.lrvb")
+    out_path = os.path.join(out_dir,f"{algo}",f"{token}.lrvb")
     match algo:
         # ideally the algorithms would be in the format of a separate file (i.e. squat), 
         # and run by a function called proc_call(token, store_path, out_path)
