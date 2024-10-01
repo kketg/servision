@@ -5,3 +5,10 @@ services:
       - "8080:8080"
   redis:
     image: "redis:alpine"
+
+  db:
+    image: mysql:alpine
+    environment:
+      - POSTGRES_DB=flask_celery
+      - POSTGRES_USER=flask_celery
+      - POSTGRES_PASSWORD=flask_celery
