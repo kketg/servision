@@ -5,9 +5,24 @@ services:
       - "8080:8080"
   redis:
     image: "redis:alpine"
-
+    ports:
+      - "6379:6379"
+  worker:
+    build: .
+    command: "celery -A main worker --loglevel=info"
+    links:
+      - redis
+    volumes:
+      - .:/usr/src/app:ro
+  flower:
+    build: .
+    command: "celery -A main flower --loglevel=info"
+    links:
+      - redis
+    volumes:
+      - .:/usr/src/app:ro
   db:
-    image: mysql:alpine
+    image: postgres:16-alpine
     environment:
       - POSTGRES_DB=flask_celery
       - POSTGRES_USER=flask_celery

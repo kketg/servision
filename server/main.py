@@ -34,13 +34,12 @@ for a in config["algorithms"]:
 print(config)
 
 
-app = Flask(__name__, static_folder="./templates/static")
+fl = Flask(__name__, static_folder="./templates/static")
 
-app.config['CELERY_BROKER_URL'] = 'redis://localhost:6379/0'
-app.config['CELERY_RESULT_BACKEND'] = 'redis://localhost:6379/1'
-
-celery = Celery(app.name, broker=app.config['CELERY_BROKER_URL'])
-celery.conf.update(app.config)
+fl.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
+fl.config['CELERY_RESULT_BACKEND'] = 'redis://redis:6379/1'
+celery = Celery(f"{fl.name}.celery", broker=fl.config['CELERY_BROKER_URL'])
+celery.conf.update(fl.config)
 
 # Meant to convert base64 encoded data from requests into the media files they represent
 def convertBase64ToFile(base64str):
@@ -62,13 +61,13 @@ def check_token(f):
         return f(*args, **kwargs)
     return wrap
 
-@app.route("/")
+@fl.route("/")
 #@check_token
 def index():
     return ""
 
 # Checks if a certain task is finished or not, and if it is returns the data
-@app.route("/status/<task_id>")
+@fl.route("/status/<task_id>")
 #@check_token
 def check_status(task_id):
     task = process_task.AsyncResult(task_id)
@@ -82,7 +81,7 @@ def check_status(task_id):
     return task.state
 
 # Root request for calling any of the algorithms
-@app.route("/vis/<algo>", methods = ['POST'])
+@fl.route("/vis/<algo>", methods = ['POST'])
 #@check_token
 def process(algo):
     if(request.method != "POST"):
@@ -132,4 +131,4 @@ def process_task(token, algo, store_path):
     
 
 if __name__ == "__main__":
-   app.run(debug=True, port=config["port"])
+   fl.run(debug=True, port=config["port"])
