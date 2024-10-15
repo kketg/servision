@@ -42,10 +42,16 @@ celery = Celery(f"{fl.name}.celery", broker=fl.config['CELERY_BROKER_URL'])
 celery.conf.update(fl.config)
 
 # Meant to convert base64 encoded data from requests into the media files they represent
-def convertBase64ToFile(base64str):
+def convert_base64_to_file(base64str):
     file_bytes = base64.b64decode(base64str)
     file = BytesIO(file_bytes)
     return file
+
+def read_file_to_base64(path):
+    with open(path, "rb") as f:
+        b = f.read()
+    return base64.b64encode(b)
+
 
 # Checks request for valid firebase authentication token
 def check_token(f):
@@ -69,21 +75,58 @@ def index():
 # Checks if a certain task is finished or not, and if it is returns the data
 @fl.route("/status/<task_id>")
 #@check_token
-def check_status(task_id):
+def check_status(task_id: str):
+    task_username = task_id.split("_")[0]
+    if request.user["uid"] != task_username:
+        return jsonify(
+            {
+                "result": 1,
+                "message": "Unauthorized status check"
+            }
+        )
     task = process_task.AsyncResult(task_id)
-    # Check if the task matches the user who made the request
     print(task)
-    if task.state == "SUCCESS":
-        data = task.get()
-        # Maybe just have it return the output path and read in the file here
-        #return send_file(..)
-
     return task.state
+
+@fl.route("/download/<task_id>")
+#@check_token
+def download_file(task_id: str):
+    task_username = task_id.split("_")[0]
+    if request.user["uid"] != task_username:
+        return jsonify(
+            {
+                "result": 1,
+                "message": "Unauthorized download"
+            }
+        )
+    task = process_task.AsyncResult(task_id)
+    if task.state == "SUCCESS":
+        result = task.get()
+        f_bytes = read_file_to_base64(result)
+        # Going to need to add other attributes like mimetype, download_name, etc
+        return send_file(f_bytes)
+
+@fl.route("/status/output/<algo>")
+def check_output(algo: str):
+    if algo not in config["algorithms"]:
+        return jsonify(
+            {
+                "result": 1,
+                "message": "Incorrect media type"
+            }
+        )
+    return jsonify(
+        {
+            "result": 0,
+            "data": os.listdir(os.path.join(out_dir, algo))
+        }
+    )
+        
 
 # Root request for calling any of the algorithms
 @fl.route("/vis/<algo>", methods = ['POST'])
 #@check_token
-def process(algo):
+def process(algo: str):
     if(request.method != "POST"):
         return jsonify(
             {
@@ -104,7 +147,9 @@ def process(algo):
     # Do a check here to make sure the user exists in firebase, 
     # and that the given token authorizes this specific user
     token = f"{algo}_{uid}_{ts}"
-    bytes = request.get_data()
+    # later on this should be decoded from base64, as binary data sent from the client should be in base64
+    bytes = request.get_data() #convert_base64_to_file(request.get_data())
+    
     store_path = os.path.join(proc_dir,f"{algo}",f"{token}.lrvb")
     with open(store_path, 'wb') as out:
         out.write(bytes)
@@ -114,7 +159,7 @@ def process(algo):
     return jsonify(
         {
             "result": 0, 
-            "processing_call": token,
+            "proc_call": token,
             "task_id": task.id,
             "message": "Successfully queued video"
         }
@@ -128,6 +173,7 @@ def process_task(token, algo, store_path):
         # and run by a function called proc_call(token, store_path, out_path)
         case _:
             sample.proc_call(token, store_path, out_path)
+    return out_path
     
 
 if __name__ == "__main__":
