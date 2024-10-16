@@ -77,13 +77,13 @@ def index():
 #@check_token
 def check_status(task_id: str):
     task_username = task_id.split("_")[0]
-    if request.user["uid"] != task_username:
-        return jsonify(
-            {
-                "result": 1,
-                "message": "Unauthorized status check"
-            }
-        )
+    # if request.user["uid"] != task_username:
+    #     return jsonify(
+    #         {
+    #             "result": 1,
+    #             "message": "Unauthorized status check"
+    #         }
+    #     )
     task = process_task.AsyncResult(task_id)
     print(task)
     return task.state

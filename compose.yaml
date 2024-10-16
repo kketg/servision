@@ -17,6 +17,8 @@ services:
   flower:
     build: .
     command: "celery -A main flower --loglevel=info"
+    ports:
+      - "6000:5555"
     links:
       - redis
     volumes:
