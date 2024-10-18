@@ -12,6 +12,8 @@ from celery import Celery
 
 import algorithms.sample as sample
 
+import psycopg2
+
 import firebase_admin
 from firebase_admin import credentials, auth
 
@@ -31,13 +33,14 @@ for a in config["algorithms"]:
     if not os.path.exists(os.path.join(out_dir, F"{a}")):
         os.makedirs(os.path.join(out_dir, F"{a}"))
 
-print(config)
-
 
 fl = Flask(__name__, static_folder="./templates/static")
 
 fl.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
 fl.config['CELERY_RESULT_BACKEND'] = 'redis://redis:6379/1'
+
+pg = psycopg2.connect(f"dbname=sv-jobs user={os.environ.get("PG_USER")} password={os.environ.get("PG_PASS")}")
+
 celery = Celery(f"{fl.name}.celery", broker=fl.config['CELERY_BROKER_URL'])
 celery.conf.update(fl.config)
 
@@ -102,6 +105,9 @@ def download_file(task_id: str):
     task = process_task.AsyncResult(task_id)
     if task.state == "SUCCESS":
         result = task.get()
+        # Here is where the has_next should be done. Each job should have a postgres entry with the token as the key
+        # It should contain a list of all the files to be downloaded, and this shouldn't mark the task for deletion 
+        # until all of them are downloaded
         f_bytes = read_file_to_base64(result)
         # Going to need to add other attributes like mimetype, download_name, etc
         return send_file(f_bytes)
@@ -155,6 +161,7 @@ def process(algo: str):
         out.write(bytes)
     # Creates a celery task to be completed by a worker
     task = process_task.delay(token, algo, store_path)
+    # PUT A POSTGRES INSERT STATEMENT HERE
     print("Task Queued: " + str(task))
     return jsonify(
         {

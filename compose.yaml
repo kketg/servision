@@ -25,7 +25,9 @@ services:
       - .:/usr/src/app:ro
   db:
     image: postgres:16-alpine
+    ports:
+      - "5432:5432"
     environment:
-      - POSTGRES_DB=flask_celery
-      - POSTGRES_USER=flask_celery
-      - POSTGRES_PASSWORD=flask_celery
+      - POSTGRES_USER=servision
+      - POSTGRES_PASSWORD=servision
+      - POSTGRES_DB=sv-jobs

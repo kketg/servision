@@ -4,3 +4,4 @@ flower
 redis
 flask
 firebase-admin
+psycopg2-binary
