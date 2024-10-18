@@ -3,5 +3,7 @@
     "algorithms": [
         "sq",
         "dl"
-    ]
+    ],
+    "pg-user": "servision",
+    "pg-pass": "servision"
 }

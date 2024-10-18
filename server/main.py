@@ -39,7 +39,7 @@ fl = Flask(__name__, static_folder="./templates/static")
 fl.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
 fl.config['CELERY_RESULT_BACKEND'] = 'redis://redis:6379/1'
 
-pg = psycopg2.connect(f"dbname=sv-jobs user={os.environ.get("PG_USER")} password={os.environ.get("PG_PASS")}")
+pg = psycopg2.connect(database="sv-jobs", user=config["pg-user"], password=config["pg-pass"], host="db", port="5432")
 
 celery = Celery(f"{fl.name}.celery", broker=fl.config['CELERY_BROKER_URL'])
 celery.conf.update(fl.config)
