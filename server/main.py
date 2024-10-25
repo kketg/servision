@@ -9,10 +9,9 @@ import json
 from functools import wraps
 
 from celery import Celery
+from zipfile import ZipFile
 
 import algorithms.sample as sample
-
-import psycopg2
 
 import firebase_admin
 from firebase_admin import credentials, auth
@@ -39,7 +38,7 @@ fl = Flask(__name__, static_folder="./templates/static")
 fl.config['CELERY_BROKER_URL'] = 'redis://redis:6379/0'
 fl.config['CELERY_RESULT_BACKEND'] = 'redis://redis:6379/1'
 
-pg = psycopg2.connect(database="sv-jobs", user=config["pg-user"], password=config["pg-pass"], host="db", port="5432")
+# pg = psycopg2.connect(database="sv-jobs", user=config["pg-user"], password=config["pg-pass"], host="db", port="5432")
 
 celery = Celery(f"{fl.name}.celery", broker=fl.config['CELERY_BROKER_URL'])
 celery.conf.update(fl.config)
@@ -104,14 +103,18 @@ def download_file(task_id: str):
         )
     task = process_task.AsyncResult(task_id)
     if task.state == "SUCCESS":
-        result = task.get()
-        # Here is where the has_next should be done. Each job should have a postgres entry with the token as the key
-        # It should contain a list of all the files to be downloaded, and this shouldn't mark the task for deletion 
-        # until all of them are downloaded
-        f_bytes = read_file_to_base64(result)
+        out_path = task.get()
+        stream = BytesIO()
+        with ZipFile(stream, "w") as zf:
+            for file in os.listdir(out_path):
+                path = os.path.join(out_path, file)
+                if os.path.isfile(path):
+                    zf.write(path, os.path.join(out_path, "archive.zip"))
+        stream.seek(0)  
         # Going to need to add other attributes like mimetype, download_name, etc
-        return send_file(f_bytes)
+        return send_file(stream, download_name="archive.zip",mimetype="application/zip")
 
+# This should probably be disabled for production
 @fl.route("/status/output/<algo>")
 def check_output(algo: str):
     if algo not in config["algorithms"]:
@@ -161,7 +164,7 @@ def process(algo: str):
         out.write(bytes)
     # Creates a celery task to be completed by a worker
     task = process_task.delay(token, algo, store_path)
-    # PUT A POSTGRES INSERT STATEMENT HERE
+
     print("Task Queued: " + str(task))
     return jsonify(
         {

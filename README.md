@@ -3,9 +3,10 @@ Servision is a modular API server that can process media with machine learning a
 
 ## Tasks left
  - Fully test firebase integration, apply user data to jobs and use auth checks on all queries
- - Algorithm may split videos into multiple segments and they will be returned as such, build download query to accomodate that
-    i.e. add a "has_next" attribute to the return data if there are more files to download
-    This could be done using the postgres instance, for each successfully completed task, and entry is made with a list of returnable filenames
+ - Create a sample model that is computationally intensive and will produce multiple files,
+    - Then test the task check and download queries
+    - Benchmark performance by queueing multiple tasks
+ - Make the program load the algorithms by name rather than having to pre-import them
 
 ## Goals
  - Integration with Firebase authentication
