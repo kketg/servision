@@ -174,7 +174,7 @@ def process(algo: str):
 
 @celery.task()
 def process_task(token, algo, store_path):
-    out_path = os.path.join(out_dir,f"{algo}",f"{token}.lrvb")
+    out_path = os.path.join(out_dir,f"{algo}",f"{token}")
     match algo:
         # ideally the algorithms would be in the format of a separate file (i.e. squat), 
         # and run by a function called proc_call(token, store_path, out_path)

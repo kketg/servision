@@ -8,6 +8,4 @@ RUN pip install -r requirements.txt
 EXPOSE 8080
 COPY ./server /web/server
 WORKDIR /web/server
-ENV FLASK_APP=main.py
-ENV FLASK_RUN_HOST=0.0.0.0
-CMD ["flask", "run", "--debug"]
+CMD ["gunicorn", "--bind", "0.0.0.0:5000", "main:fl"]
