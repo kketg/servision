@@ -8,6 +8,8 @@ import time
 import json
 from functools import wraps
 
+import importlib.util
+
 from celery import Celery
 from zipfile import ZipFile
 
@@ -19,7 +21,7 @@ from firebase_admin import credentials, auth
 # Put an environment variable with the filename here
 # cred = credentials.Certificate(...)
 # firebase_admin.initialize_app(cred)
-
+algo_dir = os.path.join(os.getcwd(), "algorithms")
 proc_dir = os.path.join("..", "PROC")
 out_dir = os.path.join("..", "OUT")
 
@@ -175,14 +177,25 @@ def process(algo: str):
         }
     )
 
+def get_algo_module(name):
+    mod_path = os.path.join(algo_dir, name + ".py")
+    print(mod_path)
+    spec = importlib.util.spec_from_file_location(name, os.path.join(algo_dir, name + ".py"))
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[name] = mod
+    spec.loader.exec_module(mod)
+    return mod
+
 @celery.task()
 def process_task(token, algo, store_path):
+    mod = get_algo_module(algo)
     out_path = os.path.join(out_dir,f"{algo}",f"{token}")
-    match algo:
-        # ideally the algorithms would be in the format of a separate file (i.e. squat), 
-        # and run by a function called proc_call(token, store_path, out_path)
-        case _:
-            sample.proc_call(token, store_path, out_path)
+    mod.proc_call(token,store_path,out_path)
+    # match algo:
+    #     # ideally the algorithms would be in the format of a separate file, 
+    #     # and run by a function called proc_call(token, store_path, out_path)
+    #     case _:
+    #         sample.proc_call(token, store_path, out_path)
     return out_path
     
 

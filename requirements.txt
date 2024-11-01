@@ -5,3 +5,5 @@ redis
 flask
 firebase-admin
 psycopg2-binary
+opencv-python
+numpy
