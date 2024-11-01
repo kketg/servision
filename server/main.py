@@ -13,8 +13,6 @@ import importlib.util
 from celery import Celery
 from zipfile import ZipFile
 
-import algorithms.sample as sample
-
 import firebase_admin
 from firebase_admin import credentials, auth
 
@@ -76,7 +74,7 @@ def check_token(f):
 def index():
     return ""
 
-# Checks if a certain task is finished or not, and if it is returns the data
+# Checks if a certain task is finished or not
 @fl.route("/status/<task_id>")
 #@check_token
 def check_status(task_id: str):
@@ -114,7 +112,14 @@ def download_file(task_id: str):
                     zf.write(path, os.path.join(out_path, "archive.zip"))
         stream.seek(0)  
         # Going to need to add other attributes like mimetype, download_name, etc
-        return send_file(stream, download_name="archive.zip",mimetype="application/zip")
+        return send_file(stream, download_name="archive.zip",mimetype="application/zip",)
+    else:
+        return jsonify(
+            {
+                "result": 1,
+                "message": "Task not completed"
+            }
+        )
 
 # This should probably be disabled for production
 @fl.route("/status/output/<algo>")
