@@ -6,21 +6,31 @@ import numpy as np
 # but this root file with a proc_call function must be present.
 # This function with these parameters is required from all algorithms for them to be called consistently within the worker.
 def proc_call(token, store_path, out_path) -> tuple[int, str]:
+    print(cv2.getBuildInformation())
     print(f"Successful SAMPLE proc call {token}")
-    return slay(token, store_path, out_path)
+    print(f"Filepath: {store_path}")
+    if not os.path.isfile(store_path):
+        raise Exception("File does not exist")
+    status, msg = slay(token, store_path, out_path)
+    if status != 0:
+        raise Exception(msg)
+    return status, msg
 
     
 # sample algorithm that uses opencv to split the video into 4 parts
 def slay(token, store_path, out_path):
-    
+    # Video output in mp4 format
+    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
     cap = cv2.VideoCapture(store_path)
+    if cap.isOpened():
+        return 1, "Failed to open video file"
     ret, frame = cap.read()
     frames = cap.get(cv2.CAP_PROP_FRAME_COUNT) 
     fps = cap.get(cv2.CAP_PROP_FPS) 
     if frames == 0 or fps == 0:
         return 1, "Given video file may be empty"
     h,w,_ = frame.shape
-    fourcc = cv2.VideoWriter_fourcc(*'mp4v')
+    
     writers = [cv2.VideoWriter(os.path.join(out_path, f"SAMPLE_{token}__{i}.mp4"),fourcc,fps,(w,h)) for i in range(4)]
     
     parts = 1

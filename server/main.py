@@ -6,6 +6,7 @@ import os
 import sys
 import time
 import json
+import mimetypes
 from functools import wraps
 
 import importlib.util
@@ -31,7 +32,6 @@ for a in config["algorithms"]:
         os.makedirs(os.path.join(proc_dir, F"{a}"))
     if not os.path.exists(os.path.join(out_dir, F"{a}")):
         os.makedirs(os.path.join(out_dir, F"{a}"))
-
 
 fl = Flask(__name__, static_folder="./templates/static")
 
@@ -158,21 +158,19 @@ def process(algo: str):
             }
         )
 
-    ts = datetime.datetime.fromtimestamp(time.time())
+    ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
+    ext = mimetypes.guess_extension(request.content_type)
     uid = "SampleUser" #request.user["uid"]
     # Do a check here to make sure the user exists in firebase, 
     # and that the given token authorizes this specific user
     token = f"{algo}_{uid}_{ts}"
     # later on this should be decoded from base64, as binary data sent from the client should be in base64
     bytes = request.get_data() #convert_base64_to_file(request.get_data())
-    
-    store_path = os.path.join(proc_dir,f"{algo}",f"{token}.lrvb")
-    with open(store_path, 'wb') as out:
-        out.write(bytes)
+    store_path = os.path.join(proc_dir,f"{algo}",f"UNPROC_{token}{ext}")
     # Creates a celery task to be completed by a worker
-    task = process_task.delay(token, algo, store_path)
+    task = process_task.delay(token, bytes, algo, os.path.abspath(store_path))
 
-    print("Task Queued: " + str(task))
+    print(f"Task Queued: {str(task)} : {token}")
     return jsonify(
         {
             "result": 0, 
@@ -192,15 +190,18 @@ def get_algo_module(name):
     return mod
 
 @celery.task()
-def process_task(token, algo, store_path):
+def process_task(token, bytes, algo, store_path):
+    # Save file data on PROC storage
+    with open(store_path, 'wb') as out:
+        out.write(bytes)
+
+    # Find algorithm module
     mod = get_algo_module(algo)
     out_path = os.path.join(out_dir,f"{algo}",f"{token}")
-    mod.proc_call(token,store_path,out_path)
-    # match algo:
-    #     # ideally the algorithms would be in the format of a separate file, 
-    #     # and run by a function called proc_call(token, store_path, out_path)
-    #     case _:
-    #         sample.proc_call(token, store_path, out_path)
+
+    # Processing call (status,msg)
+    res = mod.proc_call(token,store_path,os.path.abspath(out_path))
+
     return out_path
     
 

@@ -3,6 +3,8 @@ services:
     build: .
     ports:
       - "8080:5000"
+    volumes:
+      - shared-volume:/web
   redis:
     image: "redis:alpine"
     ports:
@@ -13,7 +15,7 @@ services:
     links:
       - redis
     volumes:
-      - .:/usr/src/app:ro
+      - shared-volume:/web
   flower:
     build: .
     command: "celery -A main flower --loglevel=info"
@@ -31,3 +33,6 @@ services:
       - POSTGRES_USER=servision
       - POSTGRES_PASSWORD=servision
       - POSTGRES_DB=sv-jobs
+
+volumes:
+  shared-volume:
