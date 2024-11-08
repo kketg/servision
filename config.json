@@ -1,9 +1,10 @@
 {
-    "port": 5000,
+    "port": 8080,
     "algorithms": [
         "sample",
         "dl"
     ],
+    "redis-ip": "0.0.0.0",
     "pg-user": "servision",
     "pg-pass": "servision"
 }

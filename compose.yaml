@@ -1,30 +1,26 @@
 services:
-  web:
-    build: .
-    ports:
-      - "8080:5000"
-    volumes:
-      - shared-volume:/web
+  # web:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile_Web
+  #   ports:
+  #     - "8080:5000"
+  #   volumes:
+  #     - shared-volume:/web
   redis:
     image: "redis:alpine"
     ports:
       - "6379:6379"
-  worker:
-    build: .
-    command: "celery -A main worker --loglevel=info"
-    links:
-      - redis
-    volumes:
-      - shared-volume:/web
-  flower:
-    build: .
-    command: "celery -A main flower --loglevel=info"
-    ports:
-      - "5555:5555"
-    links:
-      - redis
-    volumes:
-      - .:/usr/src/app:ro
+  # flower:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile_Flower
+  #   ports:
+  #     - "5555:5555"
+  #   links:
+  #     - redis
+  #   volumes:
+  #     - .:/usr/src/app:ro
   db:
     image: postgres:16-alpine
     ports:
