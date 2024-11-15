@@ -5,7 +5,6 @@ redis
 flask
 firebase-admin
 psycopg2-binary
-ffmpeg
 opencv-contrib-python-headless
 numpy
 python-dotenv
