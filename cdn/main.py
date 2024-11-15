@@ -8,9 +8,12 @@ import sys
 import time
 import json
 import mimetypes
-from functools import wraps
+from dotenv import load_dotenv
 
-ALLOWED_EXTENSIONS = {'txt', 'png', "mp4"}
+ALLOWED_EXTENSIONS = {"txt", "png", "mp4", "zip"}
+
+load_dotenv()
+port = int(os.environ.get("PORT"))
 
 proc_dir = "PROC"
 out_dir = "OUT"
@@ -39,14 +42,53 @@ def serve_root(task_id: str):
     return "serve"
 
 # Requires that full file is passed, as well as task id
-methods=['POST']
-@flask.route("/recv/proc/<id>")
-def receive_file(id: str):
+
+@flask.route("/recv/proc/<id>", methods=['POST'])
+def receive_proc_file(id: str):
+    print(request.files)
     if 'file' not in request.files:
             return jsonify({
                 "result": 1,
                 "msg": "no file attached"
             })
+    
+    file = request.files["file"]
+    if file.filename == '':
+            return jsonify({
+                "result": 1,
+                "msg": "empty file attached"
+            })
+    
+    fn = secure_filename(file.filename)
+
+    if not allowed_file(fn):
+         return jsonify({
+              "result":1,
+              "msg": "disallowed file type"
+         })
+    
+    # splits off the parts of the filename
+    split = fn.split("_")
+    bytes = file.stream.read()
+
+    # split[0] should represent the algorithm i.e. in sq_sample+user_(date) -> 'sq'
+    with open(os.path.join(proc_dir,split[0],fn), "wb") as f:
+        encoded = base64.b64encode(bytes)
+        f.write(encoded)
+
+    return jsonify({
+        "result":0
+    })
+
+
+@flask.route("/recv/out/<id>", methods=['POST'])
+def receive_out_file(id: str):
+    if 'file' not in request.files:
+            return jsonify({
+                "result": 1,
+                "msg": "no file attached"
+            })
+    
     mt = request.content_type
     file = request.files["file"]
     if file.filename == '':
@@ -54,22 +96,28 @@ def receive_file(id: str):
                 "result": 1,
                 "msg": "empty file attached"
             })
+    
     fn = secure_filename(file.filename)
+    print(fn)
     if not allowed_file(fn):
          return jsonify({
               "result":1,
               "msg": "disallowed file type"
          })
+    
     # splits off the parts of the filename
     split = fn.split("_")
     bytes = file.stream.read()
+
     # split[0] should represent the algorithm i.e. in sq_sample+user_(date) -> 'sq'
     with open(os.path.join(proc_dir,split[0],fn), "wb") as f:
         encoded = base64.b64encode(bytes)
         f.write(encoded)
+
     return jsonify({
         "result":0
     })
+
 
 @flask.route("/srv/proc/<id>")
 def serve_proc_file(id: str):
@@ -81,6 +129,7 @@ def serve_proc_file(id: str):
         decoded = base64.b64decode(bytes)
     return send_file(decoded,mt,False,id+ext)
 
+
 @flask.route("/srv/out/<id>")
 def serve_out_file(id: str):
     mt = request.content_type
@@ -90,3 +139,6 @@ def serve_out_file(id: str):
         bytes = f.read()
         decoded = base64.b64decode(bytes)
     return send_file(decoded,mt,False,id+ext)
+
+if __name__ == "__main__":
+   flask.run(debug=True, port=port)

@@ -1,5 +1,6 @@
 import datetime
 from flask import Flask, Response, request, jsonify, make_response, send_file
+import requests
 from io import BytesIO
 import base64
 import os
@@ -17,6 +18,10 @@ from zipfile import ZipFile
 import firebase_admin
 from firebase_admin import credentials, auth
 
+from dotenv import load_dotenv
+
+load_dotenv()
+
 # Put an environment variable with the filename here
 # cred = credentials.Certificate(...)
 # firebase_admin.initialize_app(cred)
@@ -25,10 +30,20 @@ algo_dir = os.path.join(os.getcwd(), "algorithms")
 with open(os.path.join("..","config.json"), "r") as f:
     config = json.loads(f.read())
 
+for a in config["algorithms"]:
+    if not os.path.exists(os.path.join("tmp", "PROC", F"{a}")):
+        os.makedirs(os.path.join("tmp", "PROC", F"{a}"))
+    if not os.path.exists(os.path.join("tmp", "OUT", F"{a}")):
+        os.makedirs(os.path.join("tmp", "OUT", F"{a}"))
+
 fl = Flask(__name__, static_folder="./templates/static")
 
-port = os.environ.get("PORT")
+port = int(os.environ.get("PORT"))
 redis_address = os.environ.get("REDIS")
+cdn_port = os.environ.get("CDN_PORT")
+cdn_address = os.environ.get("CDN_ADDRESS")
+
+cdn_url = f"http://{cdn_address}:{cdn_port}"
 
 fl.config['CELERY_BROKER_URL'] = f"redis://{redis_address}:6379/0"
 fl.config['result_backend'] = f"redis://{redis_address}:6379/1"
@@ -118,21 +133,21 @@ def download_file(task_id: str):
         )
 
 # This should probably be disabled for production
-@fl.route("/status/output/<algo>")
-def check_output(algo: str):
-    if algo not in config["algorithms"]:
-        return jsonify(
-            {
-                "result": 1,
-                "message": "Incorrect media type"
-            }
-        )
-    return jsonify(
-        {
-            "result": 0,
-            "data": os.listdir(os.path.join(out_dir, algo))
-        }
-    )
+# @fl.route("/status/output/<algo>")
+# def check_output(algo: str):
+#     if algo not in config["algorithms"]:
+#         return jsonify(
+#             {
+#                 "result": 1,
+#                 "message": "Incorrect media type"
+#             }
+#         )
+#     return jsonify(
+#         {
+#             "result": 0,
+#             "data": os.listdir(os.path.join(out_dir, algo))
+#         }
+#     )
         
 
 # Root request for calling any of the algorithms
@@ -172,10 +187,10 @@ def process(algo: str):
 
     # later on this should be decoded from base64, as binary data sent from the client should be in base64
     bytes = request.get_data() #convert_base64_to_file(request.get_data())
-    store_path = os.path.join(proc_dir,f"{algo}",f"UNPROC_{token}{ext}")
+    store_path = os.path.join("tmp", "PROC",f"{algo}",f"{token}{ext}")
         
     # Creates a celery task to be completed by a worker
-    task = process_task.delay(token, bytes, algo, os.path.abspath(store_path))
+    task = process_task.delay(token, bytes, algo, store_path)
 
     print(f"Task Queued: {str(task)} : {token}")
     return jsonify(
@@ -198,18 +213,30 @@ def get_algo_module(name):
 
 @celery.task()
 def process_task(token, bytes, algo, store_path):
+    with open(store_path, 'wb') as f:
+        f.write(bytes)
+    
     # Save file data on PROC storage
-    with open(store_path, 'wb') as out:
-        out.write(bytes)
-
+    res = requests.post(f"{cdn_url}/recv/proc/{token}",files={'file': open(store_path,'rb')})
+    
     # Find algorithm module
     mod = get_algo_module(algo)
-    out_path = os.path.join(out_dir,f"{algo}",f"{token}")
+    out_path = os.path.join("tmp", "OUT",f"{algo}",f"{token}")
 
     # Processing call (status,msg)
     status, msg = mod.proc_call(token,store_path,os.path.abspath(out_path))
     if status != 0: 
         print(msg)
+
+    stream = BytesIO()
+    with ZipFile(stream, "w") as zf:
+        for file in os.listdir(out_path):
+            path = os.path.join(out_path, file)
+            if os.path.isfile(path):
+                zf.write(path, os.path.join(out_path, "archive.zip"))
+        stream.seek(0)  
+
+    requests.post(f"{cdn_url}/recv/out/{token}",files={'file': open(os.path.join(out_path,"archive.zip"),'rb')})
 
     return out_path
     

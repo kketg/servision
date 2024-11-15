@@ -6,8 +6,8 @@ import numpy as np
 # but this root file with a proc_call function must be present.
 # This function with these parameters is required from all algorithms for them to be called consistently within the worker.
 def proc_call(token, store_path, out_path) -> tuple[int, str]:
-    os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp"
-    print(cv2.getBuildInformation())
+    #os.environ["OPENCV_FFMPEG_CAPTURE_OPTIONS"] = "rtsp_transport;udp"
+    #print(cv2.getBuildInformation())
     print(f"Successful SAMPLE proc call {token}")
     print(f"Filepath: {store_path}")
     if not os.path.isfile(store_path):
