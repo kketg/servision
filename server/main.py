@@ -21,22 +21,17 @@ from firebase_admin import credentials, auth
 # cred = credentials.Certificate(...)
 # firebase_admin.initialize_app(cred)
 algo_dir = os.path.join(os.getcwd(), "algorithms")
-proc_dir = os.path.join("..", "PROC")
-out_dir = os.path.join("..", "OUT")
 
 with open(os.path.join("..","config.json"), "r") as f:
     config = json.loads(f.read())
 
-for a in config["algorithms"]:
-    if not os.path.exists(os.path.join(proc_dir, F"{a}")):
-        os.makedirs(os.path.join(proc_dir, F"{a}"))
-    if not os.path.exists(os.path.join(out_dir, F"{a}")):
-        os.makedirs(os.path.join(out_dir, F"{a}"))
-
 fl = Flask(__name__, static_folder="./templates/static")
 
-fl.config['CELERY_BROKER_URL'] = f"redis://{config['redis-ip']}:6379/0"
-fl.config['result_backend'] = f"redis://{config['redis-ip']}:6379/1"
+port = os.environ.get("PORT")
+redis_address = os.environ.get("REDIS")
+
+fl.config['CELERY_BROKER_URL'] = f"redis://{redis_address}:6379/0"
+fl.config['result_backend'] = f"redis://{redis_address}:6379/1"
 fl.config['broker_connection_retry_on_startup'] = True
 
 # pg = psycopg2.connect(database="sv-jobs", user=config["pg-user"], password=config["pg-pass"], host="db", port="5432")
@@ -162,6 +157,7 @@ def process(algo: str):
     ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
     ext = mimetypes.guess_extension(request.content_type)
     uid = "SampleUser" #request.user["uid"]
+    uid = uid.replace("_", "+")
     # Do a check here to make sure the user exists in firebase, 
     # and that the given token authorizes this specific user
     token = f"{algo}_{uid}_{ts}"
@@ -219,4 +215,4 @@ def process_task(token, bytes, algo, store_path):
     
 
 if __name__ == "__main__":
-   fl.run(debug=True, port=config["port"])
+   fl.run(debug=True, port=port)

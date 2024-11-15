@@ -10,5 +10,8 @@ run:
     cd server
     gunicorn --bind 0.0.0.0:8080 main:fl --log-level debug
 
+down:
+    docker compose down
+
 worker:
     celery -A main worker --loglevel=info
