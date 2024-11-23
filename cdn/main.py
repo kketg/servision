@@ -37,6 +37,10 @@ flask = Flask(__name__)
 def index():
     return ""
 
+@flask.route("/status")
+def status():
+    return jsonify({"result":0})
+
 @flask.route("/srv")
 def serve_root(task_id: str):
     return "serve"
@@ -124,10 +128,13 @@ def serve_proc_file(id: str):
     mt = request.content_type
     ext = mimetypes.guess_extension(mt)
     split = id.split("_")[0]
-    with open(os.path.join(proc_dir,split[0],"UNPROC_"+id+ext), "rb") as f:
+    path = os.path.join(proc_dir,split[0],"UNPROC_"+id+ext)
+    with open(path, "rb") as f:
         bytes = f.read()
         decoded = base64.b64decode(bytes)
-    return send_file(decoded,mt,False,id+ext)
+    res = send_file(decoded,mt,False,id+ext)
+    os.remove(path)
+    return res
 
 
 @flask.route("/srv/out/<id>")
@@ -135,10 +142,13 @@ def serve_out_file(id: str):
     mt = request.content_type
     ext = mimetypes.guess_extension(mt)
     split = id.split("_")[0]
-    with open(os.path.join(out_dir,split[0],id+ext), "rb") as f:
+    path = os.path.join(out_dir,split[0],id+ext)
+    with open(path, "rb") as f:
         bytes = f.read()
         decoded = base64.b64decode(bytes)
-    return send_file(decoded,mt,False,id+ext)
+    res = send_file(decoded,mt,False,id+ext)
+    os.remove(path)
+    return res
 
 if __name__ == "__main__":
    flask.run(debug=True, port=port)

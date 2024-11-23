@@ -1,0 +1,10 @@
+# syntax=docker/dockerfile:1
+FROM python:3.12.7-slim
+COPY config.json config.json
+RUN python -m pip install --upgrade pip
+EXPOSE 9090
+COPY ./cdn /cdn
+WORKDIR /cdn
+RUN pip install -r requirements.txt
+ENV PYTHONUNBUFFERED 1
+CMD ["gunicorn", "--bind", "0.0.0.0:9090", "main:flask", "--log-level", "debug"]

@@ -9,6 +9,7 @@ import time
 import json
 import mimetypes
 from functools import wraps
+from werkzeug.utils import secure_filename
 
 import importlib.util
 
@@ -19,6 +20,8 @@ import firebase_admin
 from firebase_admin import credentials, auth
 
 from dotenv import load_dotenv
+
+from server.cdn import *
 
 load_dotenv()
 
@@ -40,10 +43,10 @@ fl = Flask(__name__, static_folder="./templates/static")
 
 port = int(os.environ.get("PORT"))
 redis_address = os.environ.get("REDIS")
+
 cdn_port = os.environ.get("CDN_PORT")
 cdn_address = os.environ.get("CDN_ADDRESS")
-
-cdn_url = f"http://{cdn_address}:{cdn_port}"
+cdn = CDN(cdn_address,cdn_port)
 
 fl.config['CELERY_BROKER_URL'] = f"redis://{redis_address}:6379/0"
 fl.config['result_backend'] = f"redis://{redis_address}:6379/1"
@@ -114,16 +117,30 @@ def download_file(task_id: str):
         )
     task = process_task.AsyncResult(task_id)
     if task.state == "SUCCESS":
-        out_path = task.get()
-        stream = BytesIO()
-        with ZipFile(stream, "w") as zf:
-            for file in os.listdir(out_path):
-                path = os.path.join(out_path, file)
-                if os.path.isfile(path):
-                    zf.write(path, os.path.join(out_path, "archive.zip"))
-        stream.seek(0)  
+        token = task.get()
+        req = cdn.get_out_file(token)
+        if 'file' not in req.files:
+            return jsonify({
+                "result": 1,
+                "message": "no file attached"
+            })
+    
+        mt = req.content_type
+        file = req.files["file"]
+        if file.filename == '':
+                return jsonify({
+                    "result": 1,
+                    "message": "empty file attached"
+                })
+    
+        if file.filename != "archive.zip":
+            return jsonify({
+                "result": 1,
+                "message": "Error with received out file"
+            })
+        bytes = file.stream.read()
         # Going to need to add other attributes like mimetype, download_name, etc
-        return send_file(stream, download_name="archive.zip",mimetype="application/zip",)
+        return send_file(bytes, download_name="archive.zip",mimetype="application/zip")
     else:
         return jsonify(
             {
@@ -217,7 +234,7 @@ def process_task(token, bytes, algo, store_path):
         f.write(bytes)
     
     # Save file data on PROC storage
-    res = requests.post(f"{cdn_url}/recv/proc/{token}",files={'file': open(store_path,'rb')})
+    proc_res = cdn.send_proc_file(token, open(store_path,'rb'))
     
     # Find algorithm module
     mod = get_algo_module(algo)
@@ -235,10 +252,11 @@ def process_task(token, bytes, algo, store_path):
             if os.path.isfile(path):
                 zf.write(path, os.path.join(out_path, "archive.zip"))
         stream.seek(0)  
+        
+    out_res = cdn.send_proc_file(token, open(os.path.join(out_path,"archive.zip"),'rb'))
 
-    requests.post(f"{cdn_url}/recv/out/{token}",files={'file': open(os.path.join(out_path,"archive.zip"),'rb')})
-
-    return out_path
+    # This should probably be changed
+    return token
     
 
 if __name__ == "__main__":
