@@ -21,18 +21,22 @@ from firebase_admin import credentials, auth
 
 from dotenv import load_dotenv
 
-from server.cdn import *
+from cdn import *
 
 load_dotenv()
 
 # Put an environment variable with the filename here
 # cred = credentials.Certificate(...)
 # firebase_admin.initialize_app(cred)
+
+# Directory for algorithm modules
 algo_dir = os.path.join(os.getcwd(), "algorithms")
 
+# Config contains algorithm names
 with open(os.path.join("..","config.json"), "r") as f:
     config = json.loads(f.read())
 
+# Sets up temporary directories to store uploaded files
 for a in config["algorithms"]:
     if not os.path.exists(os.path.join("tmp", "PROC", F"{a}")):
         os.makedirs(os.path.join("tmp", "PROC", F"{a}"))
@@ -44,10 +48,13 @@ fl = Flask(__name__, static_folder="./templates/static")
 port = int(os.environ.get("PORT"))
 redis_address = os.environ.get("REDIS")
 
+# Connects to and updates algorithms in CDN
 cdn_port = os.environ.get("CDN_PORT")
 cdn_address = os.environ.get("CDN_ADDRESS")
 cdn = CDN(cdn_address,cdn_port)
+cdn.connect(config["algorithms"])
 
+# Connects flask to redis cache for celery
 fl.config['CELERY_BROKER_URL'] = f"redis://{redis_address}:6379/0"
 fl.config['result_backend'] = f"redis://{redis_address}:6379/1"
 fl.config['broker_connection_retry_on_startup'] = True

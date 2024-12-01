@@ -17,15 +17,6 @@ port = int(os.environ.get("PORT"))
 
 proc_dir = "PROC"
 out_dir = "OUT"
-with open(os.path.join("..","config.json"), "r") as f:
-    config = json.loads(f.read())
-
-for a in config["algorithms"]:
-    if not os.path.exists(os.path.join(proc_dir, F"{a}")):
-        os.makedirs(os.path.join(proc_dir, F"{a}"))
-    if not os.path.exists(os.path.join(out_dir, F"{a}")):
-        os.makedirs(os.path.join(out_dir, F"{a}"))
-
 
 def allowed_file(filename):
     return '.' in filename and \
@@ -39,6 +30,17 @@ def index():
 
 @flask.route("/status")
 def status():
+    return jsonify({"result":0})
+
+@flask.route("/update", methods=['POST'])
+def update():
+    algorithms = request.get_json()
+    print(f"Algorithms Loaded: {algorithms}")
+    for a in algorithms:
+        if not os.path.exists(os.path.join(proc_dir, F"{a}")):
+            os.makedirs(os.path.join(proc_dir, F"{a}"))
+        if not os.path.exists(os.path.join(out_dir, F"{a}")):
+            os.makedirs(os.path.join(out_dir, F"{a}"))
     return jsonify({"result":0})
 
 @flask.route("/srv")
@@ -74,6 +76,12 @@ def receive_proc_file(id: str):
     # splits off the parts of the filename
     split = fn.split("_")
     bytes = file.stream.read()
+
+    if not os.path.exists(os.path.join(proc_dir,split[0])):
+         return jsonify({
+              "result":1,
+              "msg": "algorithm not found"
+         })
 
     # split[0] should represent the algorithm i.e. in sq_sample+user_(date) -> 'sq'
     with open(os.path.join(proc_dir,split[0],fn), "wb") as f:
@@ -112,6 +120,12 @@ def receive_out_file(id: str):
     # splits off the parts of the filename
     split = fn.split("_")
     bytes = file.stream.read()
+
+    if not os.path.exists(os.path.join(proc_dir,split[0])):
+         return jsonify({
+              "result":1,
+              "msg": "algorithm not found"
+         })
 
     # split[0] should represent the algorithm i.e. in sq_sample+user_(date) -> 'sq'
     with open(os.path.join(proc_dir,split[0],fn), "wb") as f:
