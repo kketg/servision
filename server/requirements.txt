@@ -7,4 +7,6 @@ firebase-admin
 psycopg2-binary
 opencv-contrib-python-headless
 numpy
+imageio
+imageio[ffmpeg]
 python-dotenv

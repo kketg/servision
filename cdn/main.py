@@ -43,6 +43,26 @@ def update():
             os.makedirs(os.path.join(out_dir, F"{a}"))
     return jsonify({"result":0})
 
+@flask.route("/purge/<algo>", methods=['POST'])
+def purge(algo):
+    proc_algo_dir = os.path.join(proc_dir, f"{algo}")
+    out_algo_dir = os.path.join(out_dir, f"{algo}")
+    if os.path.exists(proc_algo_dir):
+        os.removedirs(proc_algo_dir)
+    else:
+        return jsonify({
+                "result": 1,
+                "msg": "Algorithm not present"
+            })
+    if os.path.exists(out_algo_dir):
+        os.removedirs(out_algo_dir)
+    else:
+        return jsonify({
+                "result": 1,
+                "msg": "Algorithm not present"
+            })
+    
+
 @flask.route("/srv")
 def serve_root(task_id: str):
     return "serve"
