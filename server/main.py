@@ -26,8 +26,9 @@ from cdn import *
 load_dotenv()
 
 # Put an environment variable with the filename here
-# cred = credentials.Certificate(...)
-# firebase_admin.initialize_app(cred)
+firebase_certificate = os.environ.get("FB_CERT_PATH")
+cred = credentials.Certificate(firebase_certificate)
+firebase_admin.initialize_app(cred)
 
 # Directory for algorithm modules
 algo_dir = os.path.join(os.getcwd(), "algorithms")
@@ -75,14 +76,22 @@ def read_file_to_base64(path):
         b = f.read()
     return base64.b64encode(b)
 
+def is_base64(b):
+    try:
+        return base64.b64enode(base64.b64decode(b)) == b
+    except Exception:
+        return False
+
 
 # Checks request for valid firebase authentication token
 def check_token(f):
+    # Executes before function it is tagged on (i.e., the endpoints)
     @wraps(f)
     def wrap(*args,**kwargs):
         if not request.headers.get('authorization'):
             return {'message': 'No token provided'},400
         try:
+            # Adds user object to request data for use in functions
             user = auth.verify_id_token(request.headers['authorization'])
             request.user = user
         except:
@@ -91,28 +100,28 @@ def check_token(f):
     return wrap
 
 @fl.route("/")
-#@check_token
+@check_token
 def index():
     return ""
 
 # Checks if a certain task is finished or not
 @fl.route("/status/<task_id>")
-#@check_token
+@check_token
 def check_status(task_id: str):
     task_username = task_id.split("_")[0]
-    # if request.user["uid"] != task_username:
-    #     return jsonify(
-    #         {
-    #             "result": 1,
-    #             "message": "Unauthorized status check"
-    #         }
-    #     )
+    if request.user["uid"] != task_username:
+        return jsonify(
+            {
+                "result": 1,
+                "message": "Unauthorized status check"
+            }
+        )
     task = process_task.AsyncResult(task_id)
     print(task)
     return task.state
 
 @fl.route("/download/<task_id>")
-#@check_token
+@check_token
 def download_file(task_id: str):
     task_username = task_id.split("_")[0]
     if request.user["uid"] != task_username:
@@ -124,29 +133,30 @@ def download_file(task_id: str):
         )
     task = process_task.AsyncResult(task_id)
     if task.state == "SUCCESS":
+        # The task result is actually returned and the task is removed from the cache
         token = task.get()
+        # Gets output files from CDN for this task
         req = cdn.get_out_file(token)
+
+        # Check if file is invalid or nonexistent
         if 'file' not in req.files:
             return jsonify({
                 "result": 1,
                 "message": "no file attached"
             })
-    
-        mt = req.content_type
         file = req.files["file"]
         if file.filename == '':
                 return jsonify({
                     "result": 1,
                     "message": "empty file attached"
                 })
-    
         if file.filename != "archive.zip":
             return jsonify({
                 "result": 1,
-                "message": "Error with received out file"
+                "message": "file not valid"
             })
+        
         bytes = file.stream.read()
-        # Going to need to add other attributes like mimetype, download_name, etc
         return send_file(bytes, download_name="archive.zip",mimetype="application/zip")
     else:
         return jsonify(
@@ -176,7 +186,7 @@ def download_file(task_id: str):
 
 # Root request for calling any of the algorithms
 @fl.route("/vis/<algo>", methods = ['POST'])
-#@check_token
+@check_token
 def process(algo: str):
     if(request.method != "POST"):
         return jsonify(
@@ -193,14 +203,13 @@ def process(algo: str):
             }
         )
 
+    # Token construction
     ts = datetime.datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")
-    ext = mimetypes.guess_extension(request.content_type)
-    uid = "SampleUser" #request.user["uid"]
+    uid = request.user["uid"]
     uid = uid.replace("_", "+")
-    # Do a check here to make sure the user exists in firebase, 
-    # and that the given token authorizes this specific user
     token = f"{algo}_{uid}_{ts}"
 
+    ext = mimetypes.guess_extension(request.content_type)
     if ext != ".mp4":
         return jsonify(
             {
@@ -208,9 +217,7 @@ def process(algo: str):
                 "message": "Incorrect media type"
             }
         )
-
-    # later on this should be decoded from base64, as binary data sent from the client should be in base64
-    bytes = request.get_data() #convert_base64_to_file(request.get_data())
+    bytes = request.get_data()
     store_path = os.path.join("tmp", "PROC",f"{algo}",f"{token}{ext}")
         
     # Creates a celery task to be completed by a worker
@@ -226,9 +233,11 @@ def process(algo: str):
         }
     )
 
+# Loads the module associated with an algorithm 
 def get_algo_module(name):
     mod_path = os.path.join(algo_dir, name + ".py")
-    print(mod_path)
+    if not os.path.exists(mod_path):
+        raise Exception("Algorithm module does not exist")
     spec = importlib.util.spec_from_file_location(name, os.path.join(algo_dir, name + ".py"))
     mod = importlib.util.module_from_spec(spec)
     sys.modules[name] = mod
@@ -238,7 +247,10 @@ def get_algo_module(name):
 @celery.task()
 def process_task(token, bytes, algo, store_path):
     with open(store_path, 'wb') as f:
-        f.write(bytes)
+        if is_base64(bytes):
+            f.write(convert_base64_to_file(bytes).getbuffer())
+        else:
+            f.write(bytes)
     
     # Save file data on PROC storage
     proc_res = cdn.send_proc_file(token, open(store_path,'rb'))
@@ -252,6 +264,7 @@ def process_task(token, bytes, algo, store_path):
     if status != 0: 
         print(msg)
 
+    # Zips all output files into an archive to be sent back to user
     stream = BytesIO()
     with ZipFile(stream, "w") as zf:
         for file in os.listdir(out_path):
@@ -261,8 +274,6 @@ def process_task(token, bytes, algo, store_path):
         stream.seek(0)  
         
     out_res = cdn.send_proc_file(token, open(os.path.join(out_path,"archive.zip"),'rb'))
-
-    # This should probably be changed
     return token
     
 

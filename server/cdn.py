@@ -26,6 +26,17 @@ class CDN:
                 raise Exception("Failed to update CDN")
         else:
             raise Exception("Failed to update CDN")
+        
+    # Purges files for a specific algorithm from the CDN
+    def purge(self, algo):
+        status = requests.post(f"{self.url}/purge/{algo}")
+        if status.status_code == 200:
+            result = status.json()
+            if result["result"] != 0:
+                raise Exception(f"Failed to purge {algo} from CDN")
+        else:
+            raise Exception(f"Failed to purge {algo} from CDN")
+
 
     # Sends file meant for processing to be archived
     def send_proc_file(self, token, filestream):
